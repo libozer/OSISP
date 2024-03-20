@@ -61,6 +61,10 @@ void printFileInfo(const char *path, char type) {
            (type == REGULAR_FILE) ? "Regular File" : "Unknown Type");
 }
 
+int compare(const void *a, const void *b) {
+    return strcoll(*(const char **)a, *(const char **)b);
+}
+
 void listFiles(const char *basePath, const struct Options *options);
 
 void processDirectory(const char *basePath, const struct Options *options) {
@@ -69,6 +73,9 @@ void processDirectory(const char *basePath, const struct Options *options) {
         perror("Error opening directory");
         return;
     }
+
+    char *files[PATH_MAX_LENGTH];
+    int fileCount = 0;
 
     struct dirent *dp;
     while ((dp = readdir(dir)) != NULL) {
@@ -85,16 +92,26 @@ void processDirectory(const char *basePath, const struct Options *options) {
             if (S_ISDIR(sb.st_mode)) {
                 if (options->showDirs)
                     printFileInfo(path, DIRECTORY);
-                processDirectory(path, options);
             } else if (S_ISLNK(sb.st_mode) && options->showLinks) {
                 printFileInfo(path, SYMBOLIC_LINK);
             } else if (S_ISREG(sb.st_mode) && options->showFiles) {
                 printFileInfo(path, REGULAR_FILE);
             }
+
+            files[fileCount++] = strdup(path);
         }
     }
 
     closedir(dir);
+
+    if (options->isSortEnabled) {
+        qsort(files, fileCount, sizeof(char *), compare);
+    }
+
+    for (int i = 0; i < fileCount; i++) {
+        printf("%s\n", files[i]);
+        free(files[i]);
+    }
 }
 
 int main(int argc, char *argv[]) {
@@ -111,8 +128,4 @@ int main(int argc, char *argv[]) {
     listFiles(basePath, &options);
 
     return 0;
-}
-
-void listFiles(const char *basePath, const struct Options *options) {
-    processDirectory(basePath, options);
 }
