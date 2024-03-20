@@ -6,116 +6,130 @@
 #include <locale.h>
 #include <stdlib.h>
 
-#define PATH_MAX_LENGTH 1000
+#define MAX_PATH_LENGTH 1000
 
 enum FileTypes {
-    REGULAR_FILE = 'f',
-    SYMBOLIC_LINK = 'l',
-    DIRECTORY = 'd',
-    ALL_TYPES = '-'
+    FILE_REGULAR = 'f',
+    FILE_SYMBOLIC_LINK = 'l',
+    FILE_DIRECTORY = 'd',
+    FILE_ALL_TYPES = '-'
 };
 
 int compareStrings(const void *a, const void *b) {
     return strcoll(*(const char **)a, *(const char **)b);
 }
-void printFileInfo(const char *path, char type) {
-    printf("%s | %s\n", path,
-           (type == SYMBOLIC_LINK) ? "Symbolic Link" :
-           (type == DIRECTORY) ? "Directory" :
-           (type == REGULAR_FILE) ? "Regular File" : "Unknown Type");
+
+void printFileDetails(const char *filePath, char type) {
+    printf("%s | %s\n", filePath,
+           (type == FILE_SYMBOLIC_LINK) ? "Символическая ссылка" :
+           (type == FILE_DIRECTORY) ? "Директория" :
+           (type == FILE_REGULAR) ? "Обычный файл" : "Неизвестный тип");
 }
 
 void listFiles(const char *basePath, const char *fileTypes, int isSortEnabled) {
-    DIR *dir = opendir(basePath);
-    if (!dir) {
-        perror("Error opening directory");
+    DIR *directory = opendir(basePath);
+
+    if (!directory) {
+        perror("Ошибка открытия каталога");
         return;
     }
-    struct dirent *dp;
-    struct stat sb;
+
+    struct dirent *dirEntry;
+    struct stat fileStat;
+
     int fileCount = 0;
-    char **files = NULL;
+    char **filePaths = NULL;
 
-    while ((dp = readdir(dir)) != NULL) {
-        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
-            char path[PATH_MAX_LENGTH];
-            snprintf(path, sizeof(path), "%s/%s", basePath, dp->d_name);
+    while ((dirEntry = readdir(directory)) != NULL) {
+        if (strcmp(dirEntry->d_name, ".") != 0 && strcmp(dirEntry->d_name, "..") != 0) {
+            char path[MAX_PATH_LENGTH];
+            snprintf(path, sizeof(path), "%s/%s", basePath, dirEntry->d_name);
 
-            if (lstat(path, &sb) == -1) {
-                perror("Error getting file information");
+            if (lstat(path, &fileStat) == -1) {
+                perror("Ошибка получения информации о файле");
                 continue;
             }
+
             int isTypeMatched = 0;
-            if (fileTypes[0] == SYMBOLIC_LINK && S_ISLNK(sb.st_mode)) {
+
+            if (fileTypes[0] == FILE_SYMBOLIC_LINK && S_ISLNK(fileStat.st_mode)) {
                 isTypeMatched = 1;
-            } else if (fileTypes[1] == DIRECTORY && S_ISDIR(sb.st_mode)) {
+            } else if (fileTypes[1] == FILE_DIRECTORY && S_ISDIR(fileStat.st_mode)) {
                 isTypeMatched = 1;
-            } else if (fileTypes[2] == REGULAR_FILE && S_ISREG(sb.st_mode)) {
+            } else if (fileTypes[2] == FILE_REGULAR && S_ISREG(fileStat.st_mode)) {
                 isTypeMatched = 1;
             }
 
             if (isTypeMatched) {
                 if (isSortEnabled) {
-                    files = realloc(files, (fileCount + 1) * sizeof(char *));
-                    files[fileCount] = strdup(path);
+                    filePaths = realloc(filePaths, (fileCount + 1) * sizeof(char *));
+                    filePaths[fileCount] = strdup(path);
                     fileCount++;
                 } else {
-                    printFileInfo(path, (S_ISLNK(sb.st_mode)) ? SYMBOLIC_LINK :
-                                        (S_ISDIR(sb.st_mode)) ? DIRECTORY :
-                                        (S_ISREG(sb.st_mode)) ? REGULAR_FILE : ALL_TYPES);
+                    printFileDetails(path, (S_ISLNK(fileStat.st_mode)) ? FILE_SYMBOLIC_LINK :
+                                        (S_ISDIR(fileStat.st_mode)) ? FILE_DIRECTORY :
+                                        (S_ISREG(fileStat.st_mode)) ? FILE_REGULAR : FILE_ALL_TYPES);
                 }
             }
         }
     }
 
-    closedir(dir);
-    if (isSortEnabled) {
-        qsort(files, fileCount, sizeof(char *), compareStrings);
-        for (int i = 0; i < fileCount; i++) {
-            char path[PATH_MAX_LENGTH];
-            strncpy(path, files[i], PATH_MAX_LENGTH - 1);
-            path[PATH_MAX_LENGTH - 1] = '\0';
+    closedir(directory);
 
-            struct stat sb;
-            if (lstat(path, &sb) == -1) {
-                perror("Error getting file information");
+    if (isSortEnabled) {
+        qsort(filePaths, fileCount, sizeof(char *), compareStrings);
+        for (int i = 0; i < fileCount; i++) {
+            char path[MAX_PATH_LENGTH];
+            strncpy(path, filePaths[i], MAX_PATH_LENGTH - 1);
+            path[MAX_PATH_LENGTH - 1] = '\0';
+
+            struct stat fileStat;
+            if (lstat(path, &fileStat) == -1) {
+                perror("Ошибка получения информации о файле");
                 continue;
             }
-            printFileInfo(path, (S_ISLNK(sb.st_mode)) ? SYMBOLIC_LINK :
-                                (S_ISDIR(sb.st_mode)) ? DIRECTORY :
-                                (S_ISREG(sb.st_mode)) ? REGULAR_FILE : ALL_TYPES);
-            free(files[i]);
+            printFileDetails(path, (S_ISLNK(fileStat.st_mode)) ? FILE_SYMBOLIC_LINK :
+                                (S_ISDIR(fileStat.st_mode)) ? FILE_DIRECTORY :
+                                (S_ISREG(fileStat.st_mode)) ? FILE_REGULAR : FILE_ALL_TYPES);
+            free(filePaths[i]);
         }
-        free(files);
+        free(filePaths);
     }
-    dir = opendir(basePath);
-    if (!dir) {
-        perror("Error reopening directory");
+
+    directory = opendir(basePath);
+
+    if (!directory) {
+        perror("Ошибка повторного открытия каталога");
         return;
     }
-    while ((dp = readdir(dir)) != NULL) {
-        if (strcmp(dp->d_name, ".") != 0 && strcmp(dp->d_name, "..") != 0) {
-            char path[PATH_MAX_LENGTH];
-            snprintf(path, sizeof(path), "%s/%s", basePath, dp->d_name);
 
-            if (lstat(path, &sb) == -1) {
-                perror("Error getting file information");
+    while ((dirEntry = readdir(directory)) != NULL) {
+        if (strcmp(dirEntry->d_name, ".") != 0 && strcmp(dirEntry->d_name, "..") != 0) {
+            char path[MAX_PATH_LENGTH];
+            snprintf(path, sizeof(path), "%s/%s", basePath, dirEntry->d_name);
+
+            if (lstat(path, &fileStat) == -1) {
+                perror("Ошибка получения информации о файле");
                 continue;
             }
 
-            if (S_ISDIR(sb.st_mode)) {
+            if (S_ISDIR(fileStat.st_mode)) {
                 listFiles(path, fileTypes, isSortEnabled);
             }
         }
     }
-    closedir(dir);
+
+    closedir(directory);
 }
+
 int main(int argc, char *argv[]) {
     setlocale(LC_COLLATE, "ru_RU.UTF-8");
 
-    char basePath[PATH_MAX_LENGTH] = ".";
+    char basePath[MAX_PATH_LENGTH] = ".";
     int isSortEnabled = 0;
+
     int showLinks = 0, showDirs = 0, showFiles = 0;
+
     int opt;
     int pathIndex = -1;
 
@@ -126,8 +140,8 @@ int main(int argc, char *argv[]) {
         }
     }
     if (pathIndex != -1) {
-        strncpy(basePath, argv[pathIndex], PATH_MAX_LENGTH - 1);
-        basePath[PATH_MAX_LENGTH - 1] = '\0';
+        strncpy(basePath, argv[pathIndex], MAX_PATH_LENGTH - 1);
+        basePath[MAX_PATH_LENGTH - 1] = '\0';
         for (int i = pathIndex; i < argc - 1; i++) {
             argv[i] = argv[i + 1];
         }
@@ -148,7 +162,7 @@ int main(int argc, char *argv[]) {
                 isSortEnabled = 1;
                 break;
             default:
-                fprintf(stderr, "Usage: %s [-l] [-d] [-f] [-s] [path]\n", argv[0]);
+                fprintf(stderr, "Использование: %s [-l] [-d] [-f] [-s] [путь]\n", argv[0]);
                 return 1;
         }
     }
@@ -157,7 +171,9 @@ int main(int argc, char *argv[]) {
         showLinks = showDirs = showFiles = 1;
     }
 
-    char fileTypes[4] = {showLinks ? SYMBOLIC_LINK : '\0', showDirs ? DIRECTORY : '\0', showFiles ? REGULAR_FILE : '\0', '\0'};
+    char fileTypes[4] = {showLinks ? FILE_SYMBOLIC_LINK : '\0', showDirs ? FILE_DIRECTORY : '\0', showFiles ? FILE_REGULAR : '\0', '\0'};
+
     listFiles(basePath, fileTypes, isSortEnabled);
+
     return 0;
 }
